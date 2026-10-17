@@ -23,9 +23,9 @@ export default async function DashboardPage() {
   const [rides, bookings] = await Promise.all([listAllRides(), listBookings()])
   const now = nowLocal()
   const upcoming = rides.filter(
-    (ride) => ride.status === "active" && ride.departureAt > now
+    (ride) => ride.status === "ACTIVE" && ride.departureAt > now
   )
-  const pendingCount = bookings.filter((b) => b.status === "pending").length
+  const pendingCount = bookings.filter((b) => b.status === "PENDING").length
 
   const stats = [
     { label: "Curse active viitoare", value: upcoming.length },

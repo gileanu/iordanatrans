@@ -23,13 +23,14 @@ export function LoginForm() {
           </Alert>
         )}
         <Field>
-          <FieldLabel htmlFor="username">Utilizator</FieldLabel>
+          <FieldLabel htmlFor="email">Email</FieldLabel>
           <Input
-            id="username"
-            name="username"
+            id="email"
+            name="email"
+            type="email"
             autoComplete="username"
             required
-            defaultValue={state.values?.username}
+            defaultValue={state.values?.email}
           />
         </Field>
         <Field>

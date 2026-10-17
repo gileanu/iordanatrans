@@ -3,14 +3,14 @@ import { Button } from "@/components/ui/button"
 import type { Booking } from "@/lib/types"
 
 export function BookingActions({ booking }: { booking: Booking }) {
-  if (booking.status !== "pending" && booking.status !== "confirmed") {
+  if (booking.status !== "PENDING" && booking.status !== "CONFIRMED") {
     return null
   }
 
   return (
     <form action={updateBookingStatusAction} className="flex justify-end gap-1">
       <input type="hidden" name="id" value={booking.id} />
-      {booking.status === "pending" ? (
+      {booking.status === "PENDING" ? (
         <>
           <Button size="sm" type="submit" name="action" value="confirm">
             Confirmă

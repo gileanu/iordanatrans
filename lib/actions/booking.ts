@@ -35,12 +35,12 @@ export async function bookSeats(
     if (bookingId === null) {
       const ride = await getRide(id)
       let message = "Cursa nu mai este disponibilă pentru rezervări."
-      if (ride && ride.status === "active" && ride.availableSeats > 0) {
+      if (ride && ride.status === "ACTIVE" && ride.availableSeats > 0) {
         message =
           ride.availableSeats === 1
             ? "Mai este disponibil doar 1 loc."
             : `Mai sunt disponibile doar ${formatSeats(ride.availableSeats)}.`
-      } else if (ride && ride.status === "active") {
+      } else if (ride && ride.status === "ACTIVE") {
         message = "Nu mai există locuri disponibile pentru această cursă."
       }
       return { status: "error", message, values }

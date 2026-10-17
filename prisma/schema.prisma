@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum RideStatus {
+  ACTIVE
+  CANCELLED
+  COMPLETED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  CANCELLED
+}
+
+/// Passengers are created automatically when they book (role USER).
+/// Admins are promoted manually (role ADMIN) and need a passwordHash.
+model User {
+  id           Int       @id @default(autoincrement())
+  email        String    @unique
+  name         String
+  phone        String
+  role         Role      @default(USER)
+  /// scrypt hash, generate with `bun run admin:hash-password`.
+  passwordHash String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  bookings     Booking[]
+}
+
+/// Ride dates are Romanian local wall-clock times stored without time zone.
+model Ride {
+  id          Int        @id @default(autoincrement())
+  origin      String
+  destination String
+  departureAt DateTime   @db.Timestamp(0)
+  arrivalAt   DateTime   @db.Timestamp(0)
+  price       Decimal    @db.Decimal(10, 2)
+  capacity    Int
+  status      RideStatus @default(ACTIVE)
+  createdAt   DateTime   @default(now())
+  bookings    Booking[]
+
+  @@index([departureAt])
+}
+
+model Booking {
+  id        Int           @id @default(autoincrement())
+  rideId    Int
+  ride      Ride          @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  seats     Int
+  status    BookingStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+
+  @@index([rideId])
+  @@index([userId])
+}

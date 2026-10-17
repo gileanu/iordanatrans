@@ -46,7 +46,7 @@ export function RideForm({
     arrivalAt: ride?.arrivalAt ?? "",
     price: ride ? String(ride.price) : "",
     capacity: ride ? String(ride.capacity) : "",
-    status: ride?.status ?? "active",
+    status: ride?.status ?? "ACTIVE",
     ...state.values,
   }
   const heldSeats = ride ? ride.confirmedSeats + ride.pendingSeats : 0

@@ -1,51 +1,60 @@
 import "server-only"
 
-import type { Row } from "@libsql/client"
-
-import { getDb } from "@/lib/db"
+import type { Prisma } from "@/lib/generated/prisma/client"
 import { nowLocal } from "@/lib/format"
-import type { Ride, RideInput, RideStatus } from "@/lib/types"
+import { getPrisma } from "@/lib/prisma"
+import type { BookingStatus, Ride, RideInput } from "@/lib/types"
+
+// Ride dates are wall-clock strings ("YYYY-MM-DDTHH:mm", Romanian time) stored
+// in a "timestamp without time zone" column, so they round-trip through UTC.
+export function toDbDate(value: string): Date {
+  return new Date(`${value}:00Z`)
+}
+
+function fromDbDate(value: Date): string {
+  return value.toISOString().slice(0, 16)
+}
 
 // Pending bookings hold their seats too, so confirming them can never overbook.
-const RIDE_SELECT = `
-  SELECT
-    r.*,
-    COALESCE(SUM(CASE WHEN b.status = 'confirmed' THEN b.seats END), 0) AS confirmed_seats,
-    COALESCE(SUM(CASE WHEN b.status = 'pending' THEN b.seats END), 0) AS pending_seats
-  FROM rides r
-  LEFT JOIN bookings b ON b.ride_id = r.id`
+export const HELD_STATUSES: BookingStatus[] = ["PENDING", "CONFIRMED"]
 
-/** Seats held (pending + confirmed) for the ride referenced by `r.id`. */
-export const HELD_SEATS_SQL = `(
-  SELECT COALESCE(SUM(seats), 0) FROM bookings
-  WHERE ride_id = r.id AND status IN ('pending', 'confirmed')
-)`
+const rideInclude = {
+  bookings: {
+    where: { status: { in: HELD_STATUSES } },
+    select: { seats: true, status: true },
+  },
+} satisfies Prisma.RideInclude
 
-function toRide(row: Row): Ride {
-  const capacity = Number(row.capacity)
-  const confirmedSeats = Number(row.confirmed_seats)
-  const pendingSeats = Number(row.pending_seats)
+type RideRow = Prisma.RideGetPayload<{ include: typeof rideInclude }>
+
+function toRide(row: RideRow): Ride {
+  let confirmedSeats = 0
+  let pendingSeats = 0
+  for (const booking of row.bookings) {
+    if (booking.status === "CONFIRMED") confirmedSeats += booking.seats
+    else pendingSeats += booking.seats
+  }
   return {
-    id: Number(row.id),
-    origin: String(row.origin),
-    destination: String(row.destination),
-    departureAt: String(row.departure_at),
-    arrivalAt: String(row.arrival_at),
-    price: Number(row.price),
-    capacity,
-    status: row.status as RideStatus,
+    id: row.id,
+    origin: row.origin,
+    destination: row.destination,
+    departureAt: fromDbDate(row.departureAt),
+    arrivalAt: fromDbDate(row.arrivalAt),
+    price: row.price.toNumber(),
+    capacity: row.capacity,
+    status: row.status,
     confirmedSeats,
     pendingSeats,
-    availableSeats: Math.max(0, capacity - confirmedSeats - pendingSeats),
+    availableSeats: Math.max(0, row.capacity - confirmedSeats - pendingSeats),
   }
 }
 
 export const RIDE_SORTS = {
-  "data-asc": "r.departure_at ASC",
-  "data-desc": "r.departure_at DESC",
-  "pret-asc": "r.price ASC, r.departure_at ASC",
-  "pret-desc": "r.price DESC, r.departure_at ASC",
-} as const
+  "data-asc": [{ departureAt: "asc" }],
+  "data-desc": [{ departureAt: "desc" }],
+  "pret-asc": [{ price: "asc" }, { departureAt: "asc" }],
+  "pret-desc": [{ price: "desc" }, { departureAt: "asc" }],
+} satisfies Record<string, Prisma.RideOrderByWithRelationInput[]>
 export type RideSort = keyof typeof RIDE_SORTS
 
 export type RideFilters = {
@@ -57,86 +66,97 @@ export type RideFilters = {
   limit?: number
 }
 
-function likePattern(value: string): string {
-  return `%${value.replace(/[\\%_]/g, "\\$&")}%`
-}
-
 /** Active rides that have not departed yet. */
 export async function listUpcomingRides(
   filters: RideFilters = {}
 ): Promise<Ride[]> {
-  const where = ["r.status = 'active'", "r.departure_at > ?"]
-  const args: (string | number)[] = [nowLocal()]
-
-  if (filters.origin) {
-    where.push("r.origin LIKE ? ESCAPE '\\'")
-    args.push(likePattern(filters.origin))
-  }
-  if (filters.destination) {
-    where.push("r.destination LIKE ? ESCAPE '\\'")
-    args.push(likePattern(filters.destination))
-  }
+  const departureAt: Prisma.DateTimeFilter = { gt: toDbDate(nowLocal()) }
   if (filters.date) {
-    where.push("substr(r.departure_at, 1, 10) = ?")
-    args.push(filters.date)
+    const dayStart = toDbDate(`${filters.date}T00:00`)
+    departureAt.gte = dayStart
+    departureAt.lt = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000)
   }
 
-  let sql = `${RIDE_SELECT} WHERE ${where.join(" AND ")} GROUP BY r.id ORDER BY ${
-    RIDE_SORTS[filters.sort ?? "data-asc"]
-  }`
-  if (filters.limit) {
-    sql += " LIMIT ?"
-    args.push(filters.limit)
-  }
-
-  const db = await getDb()
-  const result = await db.execute({ sql, args })
-  return result.rows.map(toRide)
+  const rows = await getPrisma().ride.findMany({
+    where: {
+      status: "ACTIVE",
+      departureAt,
+      origin: filters.origin
+        ? { contains: filters.origin, mode: "insensitive" }
+        : undefined,
+      destination: filters.destination
+        ? { contains: filters.destination, mode: "insensitive" }
+        : undefined,
+    },
+    orderBy: RIDE_SORTS[filters.sort ?? "data-asc"],
+    take: filters.limit,
+    include: rideInclude,
+  })
+  return rows.map(toRide)
 }
 
 export async function listAllRides(): Promise<Ride[]> {
-  const db = await getDb()
-  const result = await db.execute(
-    `${RIDE_SELECT} GROUP BY r.id ORDER BY r.departure_at DESC`
-  )
-  return result.rows.map(toRide)
+  const rows = await getPrisma().ride.findMany({
+    orderBy: { departureAt: "desc" },
+    include: rideInclude,
+  })
+  return rows.map(toRide)
 }
 
 export async function getRide(id: number): Promise<Ride | null> {
-  const db = await getDb()
-  const result = await db.execute({
-    sql: `${RIDE_SELECT} WHERE r.id = ? GROUP BY r.id`,
-    args: [id],
+  const row = await getPrisma().ride.findUnique({
+    where: { id },
+    include: rideInclude,
   })
-  const row = result.rows[0]
   return row ? toRide(row) : null
 }
 
 /** Whether new bookings can be made for the ride right now. */
 export function isBookable(ride: Ride): boolean {
   return (
-    ride.status === "active" &&
+    ride.status === "ACTIVE" &&
     ride.departureAt > nowLocal() &&
     ride.availableSeats > 0
   )
 }
 
+function toDbData(input: RideInput) {
+  return {
+    origin: input.origin,
+    destination: input.destination,
+    departureAt: toDbDate(input.departureAt),
+    arrivalAt: toDbDate(input.arrivalAt),
+    price: input.price,
+    capacity: input.capacity,
+    status: input.status,
+  }
+}
+
 export async function createRide(input: RideInput): Promise<number> {
-  const db = await getDb()
-  const result = await db.execute({
-    sql: `INSERT INTO rides (origin, destination, departure_at, arrival_at, price, capacity, status)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    args: [
-      input.origin,
-      input.destination,
-      input.departureAt,
-      input.arrivalAt,
-      input.price,
-      input.capacity,
-      input.status,
-    ],
+  const ride = await getPrisma().ride.create({ data: toDbData(input) })
+  return ride.id
+}
+
+/** Locks the ride row until the end of the transaction. */
+export async function lockRide(
+  tx: Prisma.TransactionClient,
+  id: number
+): Promise<boolean> {
+  const rows = await tx.$queryRaw<{ id: number }[]>`
+    SELECT id FROM "Ride" WHERE id = ${id} FOR UPDATE`
+  return rows.length > 0
+}
+
+/** Seats held by pending and confirmed bookings of a ride. */
+export async function heldSeats(
+  tx: Prisma.TransactionClient,
+  rideId: number
+): Promise<number> {
+  const result = await tx.booking.aggregate({
+    where: { rideId, status: { in: HELD_STATUSES } },
+    _sum: { seats: true },
   })
-  return Number(result.lastInsertRowid)
+  return result._sum.seats ?? 0
 }
 
 /**
@@ -147,35 +167,15 @@ export async function updateRide(
   id: number,
   input: RideInput
 ): Promise<boolean> {
-  const db = await getDb()
-  const result = await db.execute({
-    sql: `UPDATE rides AS r
-          SET origin = ?, destination = ?, departure_at = ?, arrival_at = ?,
-              price = ?, capacity = ?, status = ?
-          WHERE r.id = ? AND ? >= ${HELD_SEATS_SQL}`,
-    args: [
-      input.origin,
-      input.destination,
-      input.departureAt,
-      input.arrivalAt,
-      input.price,
-      input.capacity,
-      input.status,
-      id,
-      input.capacity,
-    ],
+  return getPrisma().$transaction(async (tx) => {
+    if (!(await lockRide(tx, id))) return false
+    if (input.capacity < (await heldSeats(tx, id))) return false
+    await tx.ride.update({ where: { id }, data: toDbData(input) })
+    return true
   })
-  return result.rowsAffected > 0
 }
 
-/** Deletes a ride together with all of its bookings. */
+/** Deletes a ride; its bookings are removed by the cascading foreign key. */
 export async function deleteRide(id: number): Promise<void> {
-  const db = await getDb()
-  await db.batch(
-    [
-      { sql: "DELETE FROM bookings WHERE ride_id = ?", args: [id] },
-      { sql: "DELETE FROM rides WHERE id = ?", args: [id] },
-    ],
-    "write"
-  )
+  await getPrisma().ride.deleteMany({ where: { id } })
 }

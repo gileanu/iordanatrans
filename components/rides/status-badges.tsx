@@ -9,9 +9,9 @@ import {
 } from "@/lib/types"
 
 const RIDE_STATUS_VARIANTS = {
-  active: "default",
-  cancelled: "destructive",
-  completed: "secondary",
+  ACTIVE: "default",
+  CANCELLED: "destructive",
+  COMPLETED: "secondary",
 } as const
 
 export function RideStatusBadge({ status }: { status: RideStatus }) {
@@ -23,10 +23,10 @@ export function RideStatusBadge({ status }: { status: RideStatus }) {
 }
 
 const BOOKING_STATUS_VARIANTS = {
-  pending: "secondary",
-  confirmed: "default",
-  rejected: "destructive",
-  cancelled: "outline",
+  PENDING: "secondary",
+  CONFIRMED: "default",
+  REJECTED: "destructive",
+  CANCELLED: "outline",
 } as const
 
 export function BookingStatusBadge({ status }: { status: BookingStatus }) {

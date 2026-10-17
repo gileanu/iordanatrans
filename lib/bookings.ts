@@ -1,10 +1,9 @@
 import "server-only"
 
-import type { Row } from "@libsql/client"
-
-import { getDb } from "@/lib/db"
+import type { Prisma } from "@/lib/generated/prisma/client"
 import { nowLocal } from "@/lib/format"
-import { HELD_SEATS_SQL } from "@/lib/rides"
+import { getPrisma } from "@/lib/prisma"
+import { heldSeats, lockRide, toDbDate } from "@/lib/rides"
 import type {
   Booking,
   BookingInput,
@@ -12,75 +11,114 @@ import type {
   BookingWithRide,
 } from "@/lib/types"
 
-function toBooking(row: Row): Booking {
+const userSelect = { name: true, email: true, phone: true } as const
+
+type BookingRow = Prisma.BookingGetPayload<{
+  include: { user: { select: typeof userSelect } }
+}>
+
+function toBooking(row: BookingRow): Booking {
   return {
-    id: Number(row.id),
-    rideId: Number(row.ride_id),
-    passengerName: String(row.passenger_name),
-    email: String(row.email),
-    phone: String(row.phone),
-    seats: Number(row.seats),
-    status: row.status as BookingStatus,
-    createdAt: String(row.created_at),
+    id: row.id,
+    rideId: row.rideId,
+    passengerName: row.user.name,
+    email: row.user.email,
+    phone: row.user.phone,
+    seats: row.seats,
+    status: row.status,
+    createdAt: row.createdAt.toISOString(),
   }
 }
 
+// Pending bookings first, then newest.
+const bookingOrder: Prisma.BookingOrderByWithRelationInput[] = [
+  { status: "asc" },
+  { createdAt: "desc" },
+]
+
 export async function listBookings(): Promise<BookingWithRide[]> {
-  const db = await getDb()
-  const result = await db.execute(`
-    SELECT b.*, r.origin, r.destination, r.departure_at
-    FROM bookings b
-    JOIN rides r ON r.id = b.ride_id
-    ORDER BY b.status = 'pending' DESC, b.created_at DESC`)
-  return result.rows.map((row) => ({
+  const rows = await getPrisma().booking.findMany({
+    orderBy: bookingOrder,
+    include: {
+      user: { select: userSelect },
+      ride: { select: { origin: true, destination: true, departureAt: true } },
+    },
+  })
+  return rows.map((row) => ({
     ...toBooking(row),
     ride: {
-      origin: String(row.origin),
-      destination: String(row.destination),
-      departureAt: String(row.departure_at),
+      origin: row.ride.origin,
+      destination: row.ride.destination,
+      departureAt: row.ride.departureAt.toISOString().slice(0, 16),
     },
   }))
 }
 
 export async function listBookingsForRide(rideId: number): Promise<Booking[]> {
-  const db = await getDb()
-  const result = await db.execute({
-    sql: `SELECT * FROM bookings WHERE ride_id = ?
-          ORDER BY status = 'pending' DESC, created_at DESC`,
-    args: [rideId],
+  const rows = await getPrisma().booking.findMany({
+    where: { rideId },
+    orderBy: bookingOrder,
+    include: { user: { select: userSelect } },
   })
-  return result.rows.map(toBooking)
+  return rows.map(toBooking)
 }
 
 /**
- * Creates a pending booking in a single atomic statement: the row is only
- * inserted if the ride is active, has not departed and still has enough free
- * seats. Returns the new booking id, or null when the seats are not available.
+ * Finds or creates the passenger (role USER) for a booking. Contact details
+ * are refreshed only for regular users, never for admins.
+ */
+async function upsertPassenger(
+  tx: Prisma.TransactionClient,
+  input: BookingInput
+): Promise<number> {
+  const user = await tx.user.upsert({
+    where: { email: input.email },
+    create: {
+      email: input.email,
+      name: input.passengerName,
+      phone: input.phone,
+    },
+    update: {},
+  })
+  if (user.role === "USER") {
+    await tx.user.update({
+      where: { id: user.id },
+      data: { name: input.passengerName, phone: input.phone },
+    })
+  }
+  return user.id
+}
+
+/**
+ * Creates a pending booking. The ride row is locked for the duration of the
+ * transaction, so concurrent bookings for the same ride are serialized and
+ * the seat check cannot be raced. Returns the booking id, or null when the
+ * ride is not bookable or does not have enough free seats.
  */
 export async function createBooking(
   rideId: number,
   input: BookingInput
 ): Promise<number | null> {
-  const db = await getDb()
-  const result = await db.execute({
-    sql: `INSERT INTO bookings (ride_id, passenger_name, email, phone, seats, status)
-          SELECT r.id, ?, ?, ?, ?, 'pending'
-          FROM rides r
-          WHERE r.id = ?
-            AND r.status = 'active'
-            AND r.departure_at > ?
-            AND r.capacity - ${HELD_SEATS_SQL} >= ?`,
-    args: [
-      input.passengerName,
-      input.email,
-      input.phone,
-      input.seats,
-      rideId,
-      nowLocal(),
-      input.seats,
-    ],
+  return getPrisma().$transaction(async (tx) => {
+    if (!(await lockRide(tx, rideId))) return null
+
+    const ride = await tx.ride.findUniqueOrThrow({
+      where: { id: rideId },
+      select: { status: true, departureAt: true, capacity: true },
+    })
+    if (ride.status !== "ACTIVE" || ride.departureAt <= toDbDate(nowLocal())) {
+      return null
+    }
+    if (ride.capacity - (await heldSeats(tx, rideId)) < input.seats) {
+      return null
+    }
+
+    const userId = await upsertPassenger(tx, input)
+    const booking = await tx.booking.create({
+      data: { rideId, userId, seats: input.seats },
+    })
+    return booking.id
   })
-  return result.rowsAffected > 0 ? Number(result.lastInsertRowid) : null
 }
 
 export type BookingAction = "confirm" | "reject" | "cancel"
@@ -91,9 +129,9 @@ const TRANSITIONS: Record<
   BookingAction,
   { to: BookingStatus; from: BookingStatus[] }
 > = {
-  confirm: { to: "confirmed", from: ["pending"] },
-  reject: { to: "rejected", from: ["pending"] },
-  cancel: { to: "cancelled", from: ["pending", "confirmed"] },
+  confirm: { to: "CONFIRMED", from: ["PENDING"] },
+  reject: { to: "REJECTED", from: ["PENDING"] },
+  cancel: { to: "CANCELLED", from: ["PENDING", "CONFIRMED"] },
 }
 
 /** Applies a status transition. Returns false if it is not allowed. */
@@ -102,11 +140,9 @@ export async function updateBookingStatus(
   action: BookingAction
 ): Promise<boolean> {
   const { to, from } = TRANSITIONS[action]
-  const db = await getDb()
-  const result = await db.execute({
-    sql: `UPDATE bookings SET status = ?
-          WHERE id = ? AND status IN (${from.map(() => "?").join(", ")})`,
-    args: [to, id, ...from],
+  const result = await getPrisma().booking.updateMany({
+    where: { id, status: { in: from } },
+    data: { status: to },
   })
-  return result.rowsAffected > 0
+  return result.count > 0
 }

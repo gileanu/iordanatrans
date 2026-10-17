@@ -46,8 +46,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 function unavailableReason(ride: Ride): string {
-  if (ride.status === "cancelled") return "Această cursă a fost anulată."
-  if (ride.status === "completed" || ride.departureAt <= nowLocal()) {
+  if (ride.status === "CANCELLED") return "Această cursă a fost anulată."
+  if (ride.status === "COMPLETED" || ride.departureAt <= nowLocal()) {
     return "Această cursă a plecat deja."
   }
   return "Nu mai există locuri disponibile pentru această cursă."
@@ -94,7 +94,7 @@ export default async function RideDetailsPage({ params }: Props) {
             </CardTitle>
             <CardDescription>Cursa #{ride.id}</CardDescription>
             <CardAction className="flex flex-wrap justify-end gap-1">
-              {ride.status === "active" ? (
+              {ride.status === "ACTIVE" ? (
                 <SeatsBadge ride={ride} />
               ) : (
                 <RideStatusBadge status={ride.status} />

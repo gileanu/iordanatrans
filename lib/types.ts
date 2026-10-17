@@ -1,25 +1,25 @@
-export const RIDE_STATUSES = ["active", "cancelled", "completed"] as const
+export const RIDE_STATUSES = ["ACTIVE", "CANCELLED", "COMPLETED"] as const
 export type RideStatus = (typeof RIDE_STATUSES)[number]
 
 export const BOOKING_STATUSES = [
-  "pending",
-  "confirmed",
-  "rejected",
-  "cancelled",
+  "PENDING",
+  "CONFIRMED",
+  "REJECTED",
+  "CANCELLED",
 ] as const
 export type BookingStatus = (typeof BOOKING_STATUSES)[number]
 
 export const RIDE_STATUS_LABELS: Record<RideStatus, string> = {
-  active: "Activă",
-  cancelled: "Anulată",
-  completed: "Finalizată",
+  ACTIVE: "Activă",
+  CANCELLED: "Anulată",
+  COMPLETED: "Finalizată",
 }
 
 export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
-  pending: "În așteptare",
-  confirmed: "Confirmată",
-  rejected: "Respinsă",
-  cancelled: "Anulată",
+  PENDING: "În așteptare",
+  CONFIRMED: "Confirmată",
+  REJECTED: "Respinsă",
+  CANCELLED: "Anulată",
 }
 
 export type Ride = {

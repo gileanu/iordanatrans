@@ -9,7 +9,9 @@ export function SeatUsage({ ride }: { ride: Ride }) {
         <span>
           {held} / {ride.capacity}
         </span>
-        <span className="text-muted-foreground">{ride.availableSeats} libere</span>
+        <span className="text-muted-foreground">
+          {ride.availableSeats} libere
+        </span>
       </div>
       <Progress
         value={Math.round((held / ride.capacity) * 100)}

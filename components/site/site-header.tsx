@@ -15,7 +15,7 @@ export function SiteHeader() {
       <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-4 px-4">
         <Link
           href="/"
-          className="flex items-center gap-2 font-heading font-semibold"
+          className="flex items-center gap-2 font-heading font-semibold whitespace-nowrap"
         >
           <BusFrontIcon className="size-5" />
           Iordana Trans

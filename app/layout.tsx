@@ -5,7 +5,10 @@ import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
 
-const inter = Inter({ subsets: ["latin", "latin-ext"], variable: "--font-sans" })
+const inter = Inter({
+  subsets: ["latin", "latin-ext"],
+  variable: "--font-sans",
+})
 
 const fontMono = Geist_Mono({
   subsets: ["latin"],
@@ -17,7 +20,8 @@ export const metadata: Metadata = {
     default: "Iordana Trans – Rezervări curse autocar",
     template: "%s · Iordana Trans",
   },
-  description: "Consultă cursele de autocar disponibile și rezervă-ți locul online.",
+  description:
+    "Consultă cursele de autocar disponibile și rezervă-ți locul online.",
 }
 
 export default function RootLayout({
@@ -29,7 +33,12 @@ export default function RootLayout({
     <html
       lang="ro"
       suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, "font-sans", inter.variable)}
+      className={cn(
+        "antialiased",
+        fontMono.variable,
+        "font-sans",
+        inter.variable
+      )}
     >
       <body>
         <ThemeProvider>{children}</ThemeProvider>

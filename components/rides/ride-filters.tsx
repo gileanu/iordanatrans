@@ -73,7 +73,11 @@ export function RideFilters({
           <SearchIcon data-icon="inline-start" />
           Caută
         </Button>
-        <Button variant="ghost" nativeButton={false} render={<Link href="/cursa" />}>
+        <Button
+          variant="ghost"
+          nativeButton={false}
+          render={<Link href="/cursa" />}
+        >
           Resetează
         </Button>
       </div>

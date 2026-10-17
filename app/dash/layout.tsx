@@ -38,6 +38,7 @@ export default async function DashLayout({
               <Button
                 variant="ghost"
                 size="sm"
+                aria-label="Vezi site-ul"
                 nativeButton={false}
                 render={<Link href="/" />}
               >

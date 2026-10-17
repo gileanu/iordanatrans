@@ -4,12 +4,7 @@ import { ArrowLeftIcon } from "lucide-react"
 
 import { RideForm } from "@/components/dash/ride-form"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { createRideAction } from "@/lib/actions/admin"
 import { requireAdmin } from "@/lib/auth"
 

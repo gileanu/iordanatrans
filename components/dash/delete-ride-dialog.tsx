@@ -37,8 +37,8 @@ export function DeleteRideDialog({
             {bookingCount > 0
               ? `Va fi ștearsă definitiv și ${formatCount(bookingCount, "rezervarea asociată", "rezervări asociate")}. `
               : ""}
-            Acțiunea nu poate fi anulată. Dacă vrei doar să oprești
-            rezervările, schimbă statusul cursei în „Anulată”.
+            Acțiunea nu poate fi anulată. Dacă vrei doar să oprești rezervările,
+            schimbă statusul cursei în „Anulată”.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

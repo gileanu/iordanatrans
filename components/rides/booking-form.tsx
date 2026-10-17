@@ -126,7 +126,9 @@ export function BookingForm({
             defaultValue={values.seats ?? "1"}
             aria-invalid={!!errors.seats}
           />
-          <FieldDescription>Maximum {maxSeats} pentru această rezervare.</FieldDescription>
+          <FieldDescription>
+            Maximum {maxSeats} pentru această rezervare.
+          </FieldDescription>
           <FieldError>{errors.seats}</FieldError>
         </Field>
 

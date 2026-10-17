@@ -24,7 +24,11 @@ export default async function HomePage() {
             avantajele rezervării online. Va fi înlocuit cu conținutul final.
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button size="lg" nativeButton={false} render={<Link href="/cursa" />}>
+            <Button
+              size="lg"
+              nativeButton={false}
+              render={<Link href="/cursa" />}
+            >
               Vezi toate cursele
               <ArrowRightIcon data-icon="inline-end" />
             </Button>
@@ -50,7 +54,11 @@ export default async function HomePage() {
               Următoarele plecări programate.
             </p>
           </div>
-          <Button variant="link" nativeButton={false} render={<Link href="/cursa" />}>
+          <Button
+            variant="link"
+            nativeButton={false}
+            render={<Link href="/cursa" />}
+          >
             Toate cursele
             <ArrowRightIcon data-icon="inline-end" />
           </Button>

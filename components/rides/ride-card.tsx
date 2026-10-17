@@ -1,5 +1,10 @@
 import Link from "next/link"
-import { ArrowRightIcon, CalendarIcon, ClockIcon, UsersIcon } from "lucide-react"
+import {
+  ArrowRightIcon,
+  CalendarIcon,
+  ClockIcon,
+  UsersIcon,
+} from "lucide-react"
 
 import { SeatsBadge } from "@/components/rides/status-badges"
 import { Button } from "@/components/ui/button"
@@ -41,7 +46,9 @@ export function RideCard({ ride }: { ride: Ride }) {
         <div className="flex items-center gap-2">
           <CalendarIcon className="size-4" />
           Plecare la ora{" "}
-          <span className="text-foreground">{formatTime(ride.departureAt)}</span>
+          <span className="text-foreground">
+            {formatTime(ride.departureAt)}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <ClockIcon className="size-4" />
@@ -59,7 +66,10 @@ export function RideCard({ ride }: { ride: Ride }) {
         <span className="font-heading text-base font-semibold">
           {formatPrice(ride.price)}
         </span>
-        <Button nativeButton={false} render={<Link href={`/cursa/${ride.id}`} />}>
+        <Button
+          nativeButton={false}
+          render={<Link href={`/cursa/${ride.id}`} />}
+        >
           Vezi detalii
           <ArrowRightIcon data-icon="inline-end" />
         </Button>

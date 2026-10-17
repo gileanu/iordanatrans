@@ -39,8 +39,7 @@ function isValidDateTime(value: string): boolean {
   if (!DATETIME_RE.test(value)) return false
   const date = new Date(`${value}:00Z`)
   return (
-    !Number.isNaN(date.getTime()) &&
-    date.toISOString().slice(0, 16) === value
+    !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 16) === value
   )
 }
 
@@ -93,10 +92,7 @@ export function parseRideForm(
   }
   if (!isValidDateTime(values.arrivalAt)) {
     errors.arrivalAt = "Alege o dată și o oră de sosire valide."
-  } else if (
-    !errors.departureAt &&
-    values.arrivalAt <= values.departureAt
-  ) {
+  } else if (!errors.departureAt && values.arrivalAt <= values.departureAt) {
     errors.arrivalAt = "Sosirea trebuie să fie după plecare."
   }
 
@@ -153,11 +149,7 @@ export function parseBookingForm(
     errors.phone = "Introdu un număr de telefon valid."
   }
   const seats = Number(values.seats)
-  if (
-    !Number.isInteger(seats) ||
-    seats < 1 ||
-    seats > MAX_SEATS_PER_BOOKING
-  ) {
+  if (!Number.isInteger(seats) || seats < 1 || seats > MAX_SEATS_PER_BOOKING) {
     errors.seats = `Poți rezerva între 1 și ${MAX_SEATS_PER_BOOKING} locuri.`
   }
 
